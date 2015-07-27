@@ -1,0 +1,122 @@
+--- 
+
+- hosts: raspbery
+  sudo: yes
+
+  vars:
+    php_packages:
+      - php-apc
+      - php-pear
+      - php5-cli
+      - php5-common
+      - php5-curl
+      - php5-fpm
+      - php5-mcrypt
+      - php5-memcache
+      - php5-memcached
+      - php5-sqlite
+
+  name: Apply boogeyman configuration
+
+  tasks:
+    - name: Installing locales
+      locale_gen: name=en_US state=present
+      locale_gen: name=en_US.UTF-8 state=present
+      locale_gen: name=ru_RU state=present
+      locale_gen: name=ru_RU.UTF-8 state=present
+
+#    - name: update cache
+#      apt: update_cache=yes
+
+    - name: install nginx
+      apt: name=nginx state=present
+
+    - name: start nginx
+      service: name=nginx state=started enabled=yes
+
+    - name: install sqlite3
+      apt: name=sqlite3 state=present
+
+    - name: install memcached
+      apt: name=memcached state=present
+
+    - name: start memcached
+      service: name=memcached state=started enabled=yes
+
+    - name: start php5-fpm
+      service: name=php5-fpm state=started enabled=yes
+
+    - name: install nodejs
+      apt: name=nodejs state=present
+
+    - name: install npm
+      apt: name=npm state=present
+
+    - name: configure npm
+      shell: npm config set registry="http://registry.npmjs.org/"
+
+    - name: mkdir
+      shell: mkdir -p /home/pi/www/boogeyman
+
+    - name: mkdir
+      shell: mkdir -p /home/pi/www/boogeyman-notif
+
+    - name: recursively copy files
+      synchronize: src=/Users/kainet/projects/web/boogeyman dest=/home/pi/www
+
+    - name: recursively copy files
+      synchronize: src=/Users/kainet/projects/web/boogeyman-notif dest=/home/pi/www
+
+    - name: install socket.io
+      npm: name=socket.io state=present version=0.9.14 path=/home/pi/www/boogeyman-notif
+
+    - name: rm nginx default
+      shell: rm /etc/nginx/sites-enabled/default
+      ignore_errors: yes
+
+    - name: Copy /etc/nginx/sites-enabled/boogeyman.conf
+      copy: src=files/etc/boogeyman.conf dest=/etc/nginx/sites-enabled/boogeyman.conf
+
+    - name: Copy /etc/rc.local
+      copy: src=files/etc/rc.local dest=/etc/rc.local
+
+    - name: Copy /etc/crontab
+      copy: src=files/etc/crontab dest=/etc/crontab
+
+    - name: Copy /etc/network/interfaces
+      copy: src=files/etc/interfaces dest=/etc/network/interfaces mode=777
+
+    - name: copy init.d boogeyman
+      shell: cp /home/pi/www/boogeyman/boogeyman.sh /etc/init.d/boogeyman
+
+    - name: init rc.d
+      shell: update-rc.d boogeyman defaults
+
+    - name: rm db
+      shell: rm /home/pi/www/boogeyman/storage/database/boogeyman.sqlite
+
+    - name: dump db
+      shell: sqlite3 /home/pi/www/boogeyman/storage/database/boogeyman.sqlite < /home/pi/www/boogeyman/boogeyman.sqlite.dump
+
+    - name: chmod db
+      shell: chmod 777 /home/pi/www/boogeyman/storage/database/boogeyman.sqlite
+
+    - name: chmod storage
+      shell: chmod -R 777 /home/pi/www/boogeyman/storage
+
+    - name: chown
+      shell: chown pi:pi -R /home/pi/www
+
+    - name: stop boogeyman
+      service: name=boogeyman state=stopped
+
+    - name: start nginx
+      service: name=nginx state=restarted
+
+    - name: start boogeyman
+      service: name=boogeyman state=started
+
+    - name: purge
+      apt: name=wolfram-engine state=absent purge=yes
+
+  handlers:
